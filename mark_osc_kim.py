@@ -221,3 +221,4 @@ for subj in subjs:
         epo = mne.Epochs(raw, events[0], tmin=-1.25, tmax=1.25, detrend=None,
                          baseline=(-1.25,-0.75), metadata=df, event_repeated="drop").load_data()
         epo.save("{}epi_{}_{}-epo.fif".format(proc_dir,subj,cond), overwrite=True)
+        breakpoint()
