@@ -34,7 +34,7 @@ for filename in proclist:
                                         "Pz", "Fp1", "Fp2", "O1", "O2",
                                         "VEOG", "HEOG", "ECG1+"])
     raw_sel.filter(l_freq=0.3, h_freq=30, n_jobs=4)
-    raw_sel.resample(100, n_jobs="cuda")
+    #raw_sel.resample(100, n_jobs="cuda")
     ica = ICA(method="picard")
     ica.fit(raw_sel)
     ica.save("{}sel_c_EPI_{}-ica.fif".format(proc_dir, file_id))

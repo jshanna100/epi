@@ -22,7 +22,7 @@ file_sections = {"3002_20201014-raw.fif":(11700,14000),
                  "3001_20200708-raw.fif":(4640,6700),
                  "3001_20200710-raw.fif":(2520,4050)}
 
-regions = ["HHL", "HBL", "HTL", "HHR", "HBR", "HTR"]
+regions = ["HHL", "HBL", "HTL", "HHR", "HBR", "HTR", "AM", "H.L", "H.R", "H"]
 
 for file_id, section in file_sections.items():
     raw = mne.io.Raw("{}c_EPI_{}".format(proc_dir, file_id), preload=True)
@@ -45,5 +45,6 @@ for file_id, section in file_sections.items():
             new_chs.append(new_ch)
     raw.add_channels(new_chs, force_update_info=True)
     raw.pick_channels(regions)
+    raw.set_eeg_reference(ref_channels=["AM"], ch_type="ecog")
 
-    raw.save("{}ecog_EPI_{}".format(proc_dir, file_id))
+    raw.save("{}ecog_EPI_{}".format(proc_dir, file_id), overwrite=True)
