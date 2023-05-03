@@ -5,20 +5,16 @@ import re
 from read_trc import raw_from_neo
 import numpy as np
 
-# different directories for home and office computers; not generally relevant
-# for other users
-if isdir("/home/jev"):
-    root_dir = "/home/jev/hdd/epi/"
-elif isdir("/home/jeff"):
-    root_dir = "/home/jeff/hdd/jeff/epi/"
 
+root_dir = "/home/jev/hdd/epi/"
 subjs = ["3001", "3002"]
+subjs = ["3002"]
 
 raw_dir = root_dir+"raw/" # get raw files from here
 proc_dir = root_dir+"proc/" # save the processed files here
-proclist = listdir(proc_dir) # and in proc directory
-overwrite = True # skip
-downsamp = 500
+proclist = listdir(proc_dir)
+overwrite = True
+downsamp = 400 # downsample to 400Hz, could prob go even lower
 
 for this_subj in subjs:
     this_dir = "{}EPI_{}/EEG/".format(raw_dir, this_subj)
@@ -43,24 +39,28 @@ for this_subj in subjs:
                 print("Skipping.")
                 continue
             for id in ids:
+                # this loop makes temporary conversions to MNE in the next
+                # step these conversions are combined into a single file per
+                # session
                 filename = "{}_{}_{}.TRC".format(sub, day, id)
                 if filename not in filelist:
                     continue
                 raw = raw_from_neo(this_dir+filename) # convert
-                raw.resample(400, n_jobs="cuda")
-                raw.save("{}temp/{}-raw.fif".format(proc_dir,id), overwrite=True)
+                raw.resample(downsamp, n_jobs="cuda") # change to integer if no cuda
+                raw.save("{}temp/{}-raw.fif".format(proc_dir, id),
+                          overwrite=True)
                 raw_names.append("{}temp/{}-raw.fif".format(proc_dir,id))
                 datetimes.append(raw.info["meas_date"])
                 del raw
 
-            file_order = np.argsort(datetimes)
+            # now combine the raw files into single session
+            file_order = np.argsort(datetimes) # make sure we append files in correct order
             raw_names = [raw_names[idx] for idx in np.nditer(file_order)]
             raw = mne.io.Raw(raw_names[0])
             for rn in raw_names[1:]:
                 next_raw = mne.io.Raw(rn)
                 raw.append(next_raw)
-                del next_raw
             raw.meas_date = datetimes[0]
             raw.save("{}EPI_{}_{}-raw.fif".format(proc_dir, sub, day),
                      overwrite=overwrite)
-            del raw
+            del raw, next_raw
