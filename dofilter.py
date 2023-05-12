@@ -2,28 +2,35 @@ import mne
 from os.path import isdir
 import numpy as np
 import re
+from os.path import join
+from os import listdir
 
-# different directories for home and office computers; not generally relevant
-# for other users
-if isdir("/home/jev"):
-    root_dir = "/home/jev/hdd/epi/"
-elif isdir("/home/jeff"):
-    root_dir = "/home/jeff/hdd/jeff/epi/"
+root_dir = "/home/jev/hdd/epi/"
+proc_dir = join(root_dir, "proc") # where the files are
+proc_files = listdir(proc_dir)
 
-proc_dir = root_dir+"/proc/"
-
-subjs = ["1001", "1002"]
+subjs = ["1001", "1002", "3001", "3002"]
 conds = ["Stim", "Sham"]
 
 l_freq = 0.3
-h_freq = 200
-n_jobs = "cuda"
+h_freq = 150
+n_jobs = "cuda" # if you don't have cuda, change this 1 or something higher
+overwrite = True
 
 for subj in subjs:
-    for cond in conds:
-        raw = mne.io.Raw("{}EPI_{}_{}-raw.fif".format(proc_dir, subj, cond),
-                         preload=True)
-        raw.filter(l_freq=0.3, h_freq=200, n_jobs=n_jobs)
+    for filename in proc_files:
+        # correctly identify subject raw files
+        ma = re.match(f"EPI_{subj}_(.*)-raw.fif", filename)
+        if not ma:
+            continue
+        infile = f"EPI_{subj}_{ma.groups(0)[0]}-raw.fif"
+        # check if it already exists
+        outfile = f"f_{infile}"
+        if outfile in proc_files and not overwrite:
+            print(f"{outfile} already exists. Skipping...")
+            continue
+        # filter and save
+        raw = mne.io.Raw(join(proc_dir, infile), preload=True)
+        raw.filter(l_freq=l_freq, h_freq=h_freq, n_jobs=n_jobs)
         raw.notch_filter(np.arange(50,h_freq,50), n_jobs=n_jobs)
-        raw.save("{}f_EPI_{}_{}-raw.fif".format(proc_dir, subj, cond),
-                 overwrite=True)
+        raw.save(join(proc_dir, outfile), overwrite=overwrite)

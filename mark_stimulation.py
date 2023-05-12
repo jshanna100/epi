@@ -1,51 +1,51 @@
 import mne
 from os import listdir
-from os.path import isdir
-import re
+from os.path import join
 import numpy as np
-from scipy.signal import hilbert
-from scipy.stats import kurtosis
-from mne.time_frequency import psd_multitaper, tfr_morlet
-import matplotlib.pyplot as plt
-import pandas as pd
-plt.ion()
+from mne.time_frequency import tfr_morlet
 
-if isdir("/home/jev"):
-    root_dir = "/home/jev/hdd/epi/"
-elif isdir("/home/jeff"):
-    root_dir = "/home/jeff/hdd/jeff/epi/"
-proc_dir = root_dir+"proc/"
+"""
+Figures out and marks where stimulation occurred.
+"""
 
-#conds = ["sham"]
-tfr_thresh_range = list(np.linspace(0.001,0.008,50))
+root_dir = "/home/jev/hdd/epi/"
+proc_dir = join(root_dir, "proc")
+
+tfr_thresh_range = list(np.linspace(0.001, 0.008, 50))
 tfr_lower_thresh = 1e-6
-pre_stim_buffer = 5
-post_stim_buffer = 10
-analy_duration = 60
+pre_stim_buffer = 5 # in case of residual stimulation effects
+post_stim_buffer = 10 # in case of residual stimulation effects
+analy_duration = 60 # how much of a time period before and after stimulation
+# if you want a different time period for the intermediate stimulations,
+# otherwise leave the same as analy_duration
 between_duration = 60
 filelist = listdir(proc_dir)
-epolen = 10
+epolen = 10 # length of equal length epochs to break the raw file into
 min_bad = 25
 picks = ["Fz","AFz","Fp1","Fp2","FC1","FC2","Cz"]
 n_jobs = 8
 
-subjs = ["1001", "1002"]
-conds = ["Stim"]
+subjs = ["1001", "1002", "3001", "3002"]
+conds = ["Stim"] # no point in doing this to sham conditions
 
 for subj in subjs:
     for cond in conds:
-        raw = mne.io.Raw("{}of_EPI_{}_{}-raw.fif".format(proc_dir, subj, cond),
-                            preload=True)
+        raw = mne.io.Raw(join(proc_dir, f"f_EPI_{subj}_{cond}-raw.fif"),
+                         preload=True)
+        # identify what frequency was the stimulation
+        psd = raw.compute_psd(fmax=2, picks=picks, n_jobs=n_jobs,
+                              method="welch", n_fft=16384)
+        freqs, psd = psd.freqs, psd.get_data().mean(axis=0)
+        fmax = freqs[np.argmax(psd)]
         epo = mne.make_fixed_length_epochs(raw, duration=epolen)
-        power = tfr_morlet(epo, [0.75], n_cycles=3, picks=picks,
+        # get a TFR at the stimulation frequency
+        power = tfr_morlet(epo, [fmax], n_cycles=3, picks=picks,
                            average=False, return_itc=False, n_jobs=n_jobs)
 
-        tfr = np.zeros(0)
-        for epo_tfr in power.__iter__():
-            tfr = np.concatenate((tfr,np.mean(epo_tfr[:,0,],axis=0)))
-        tfr_aschan = np.zeros(len(raw))
-        tfr_aschan[:len(tfr)] = tfr
+        # average the channels, put back into single dimensional form
+        tfr_aschan= power.data.mean(axis=1)[:, 0].reshape(-1)
 
+        # identify stimulation periods. do not remember how any of this works
         winner_std = np.inf
         for tfr_upper_thresh in tfr_thresh_range:
             these_annotations = raw.annotations.copy()
@@ -107,7 +107,8 @@ for subj in subjs:
         # last post-stimulation period should be longer
         last_annot = winner_annot[-1].copy()
         winner_annot.delete(-1)
-        winner_annot.append(last_annot["onset"], analy_duration, last_annot["description"])
+        winner_annot.append(last_annot["onset"], analy_duration,
+                            last_annot["description"])
 
         raw.set_annotations(winner_annot)
         print("\nThreshold of {} was optimal.\nDurations:".format(winner_id))
@@ -116,4 +117,4 @@ for subj in subjs:
 
         avg_dur = np.array(winner_durations).mean()
 
-    raw.save("{}aof_EPI_{}_{}-raw.fif".format(proc_dir, subj, cond), overwrite=True)
+    raw.save(join(proc_dir, f"af_EPI_{subj}_{cond}-raw.fif"), overwrite=True)

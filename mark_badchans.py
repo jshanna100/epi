@@ -1,28 +1,29 @@
 import mne
-from os.path import isdir
+from os.path import join
 import numpy as np
 from anoar import BadChannelFind
 
-# different directories for home and office computers; not generally relevant
-# for other users
-if isdir("/home/jev"):
-    root_dir = "/home/jev/hdd/epi/"
-elif isdir("/home/jeff"):
-    root_dir = "/home/jeff/hdd/jeff/epi/"
+"""
+Finds bad channels. Because of the enormous size of these files, the old ones
+are simply overwritten, making it impossible to know if this has been run
+or not from the filename alone. If you wish to change this, change the
+raw.save parameters in the final line.
+"""
 
-proc_dir = root_dir+"/proc/"
+root_dir = "/home/jev/hdd/epi/"
+proc_dir = join(root_dir, "proc")
 
-subjs = ["1001"]
-conds = ["Stim"]
+subjs = ["1001", "1002", "3001", "3002"]
+conds = ["Sham", "Stim"]
 
 for subj in subjs:
     for cond in conds:
-        raw = mne.io.Raw("{}caof_EPI_{}_{}-raw.fif".format(proc_dir, subj, cond),
+        raw = mne.io.Raw(join(proc_dir, f"f_EPI_{subj}_{cond}-raw.fif"),
                          preload=True)
         picks = mne.pick_types(raw.info, eeg=True)
         bcf = BadChannelFind(picks, thresh=0.5)
         bad_chans = bcf.recommend(raw)
         print(bad_chans)
         raw.info["bads"].extend(bad_chans)
-        raw.save("{}bcaof_EPI_{}_{}-raw.fif".format(proc_dir, subj, cond),
+        raw.save(join(proc_dir, f"f_EPI_{subj}_{cond}-raw.fif"),
                  overwrite=True)

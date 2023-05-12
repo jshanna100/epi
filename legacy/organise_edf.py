@@ -2,6 +2,7 @@ import mne
 from os.path import isdir
 import numpy as np
 import re
+import
 
 def chan_sub(chans):
     chans[0,] = chans[0,] - chans[1,]

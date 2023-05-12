@@ -4,63 +4,115 @@ from os.path import isdir
 import re
 from read_trc import raw_from_neo
 import numpy as np
+from os.path import join
 
 
-root_dir = "/home/jev/hdd/epi/"
-subjs = ["3001", "3002"]
-subjs = ["3002"]
+"""
+Conversion function for EPI files recorded at Frankfurt (trc to mne-python).
+This has been set-up for the 3001 and 3002, and may not necessarily work for
+later subjects if they are organised differently. The read_trc function
+is imported from raw_from_neo.py, which must be in the same directory
+as this script.
+"""
 
-raw_dir = root_dir+"raw/" # get raw files from here
-proc_dir = root_dir+"proc/" # save the processed files here
-proclist = listdir(proc_dir)
-overwrite = True
-downsamp = 400 # downsample to 400Hz, could prob go even lower
+subjs = ["3001", "3002"] # define subjects
+
+root_dir = "/home/jev/hdd/epi/" # root directory
+raw_dir = join(root_dir, "raw") # get raw files from here
+proc_dir = join(root_dir, "proc") # save the processed files here
+proclist = listdir(proc_dir) # get list of files already processed
+overwrite = True # if False, skip if file already there
+
+downsamp = 400 # downsample to 400Hz, could probably go even lower
 
 for this_subj in subjs:
-    this_dir = "{}EPI_{}/EEG/".format(raw_dir, this_subj)
+    this_dir = join(raw_dir, f"EPI_{this_subj}", "EEG")
     filelist = listdir(this_dir) # get list of all files in raw directory
     subs, days, ids = [], [], []
+
+    # prepare lists of all days, and IDs for this subject
     for filename in filelist: # cycle through all files in raw directory
         this_match = re.search("(.*)_(.*)_(.*).((TRC)|(trc))", filename)
         # do something if the file fits the raw file pattern
-        if this_match:
-            subs.append(this_match.group(1))
-            days.append(this_match.group(2))
-            ids.append(this_match.group(3))
-    subs = list(np.unique(np.array(subs)))
+        if not this_match:
+            continue # doesn't match, skip
+        days.append(this_match.group(2))
+        ids.append(this_match.group(3))
+
+    # get rid of redundant
     days = list(np.unique(np.array(days)))
     ids = list(np.unique(np.array(ids)))
 
-    for sub in subs:
-        for day in days:
-            raw_names = []
-            datetimes = []
-            if "EPI_{}_{}-raw.fif".format(sub, day) in proclist and not overwrite:
-                print("Skipping.")
+    for day in days:
+        raw_names = []
+        datetimes = []
+        if f"EPI_{this_subj}_{day}-raw.fif" in proclist and not overwrite:
+            print("Already exist; Skipping...")
+            continue
+        for id in ids:
+            # this loop makes temporary conversions to MNE in the next
+            # step these conversions are combined into a single file per
+            # session
+            filename = "{}_{}_{}.TRC".format(this_subj, day, id)
+            if filename not in filelist:
                 continue
-            for id in ids:
-                # this loop makes temporary conversions to MNE in the next
-                # step these conversions are combined into a single file per
-                # session
-                filename = "{}_{}_{}.TRC".format(sub, day, id)
-                if filename not in filelist:
-                    continue
-                raw = raw_from_neo(this_dir+filename) # convert
-                raw.resample(downsamp, n_jobs="cuda") # change to integer if no cuda
-                raw.save("{}temp/{}-raw.fif".format(proc_dir, id),
-                          overwrite=True)
-                raw_names.append("{}temp/{}-raw.fif".format(proc_dir,id))
-                datetimes.append(raw.info["meas_date"])
-                del raw
+            raw = raw_from_neo(join(this_dir, filename)) # convert
+            raw.resample(downsamp, n_jobs="cuda") # change to integer if no cuda
+            temp_path = join(proc_dir, "temp", f"{id}-raw.fif")
+            raw.save(temp_path, overwrite=True)
+            raw_names.append(temp_path)
+            datetimes.append(raw.info["meas_date"])
+            del raw
 
-            # now combine the raw files into single session
-            file_order = np.argsort(datetimes) # make sure we append files in correct order
-            raw_names = [raw_names[idx] for idx in np.nditer(file_order)]
-            raw = mne.io.Raw(raw_names[0])
-            for rn in raw_names[1:]:
-                next_raw = mne.io.Raw(rn)
-                raw.append(next_raw)
-            raw.meas_date = datetimes[0]
-            raw.save("{}EPI_{}_{}-raw.fif".format(proc_dir, sub, day),
-                     overwrite=overwrite)
-            del raw, next_raw
+        # now combine the raw files into single session
+        file_order = np.argsort(datetimes) # make sure we append files in correct order
+        raw_names = [raw_names[idx] for idx in np.nditer(file_order)]
+        raw = mne.io.Raw(raw_names[0])
+        for rn in raw_names[1:]:
+            next_raw = mne.io.Raw(rn)
+            raw.append(next_raw)
+        raw.meas_date = datetimes[0]
+        del next_raw
+        raw.load_data()
+
+        # channel organisation
+        if "VO1" in raw.ch_names:
+            raw.rename_channels({"VO1":"VO"})
+        if "Vu1" in raw.ch_names:
+            raw.rename_channels({"Vu1":"VU"})
+        if "RE" in raw.ch_names:
+            raw.rename_channels({"RE":"Re"})
+        if "RE1" in raw.ch_names:
+            raw.rename_channels({"RE1":"Re"})
+        if "Li1" in raw.ch_names:
+            raw.rename_channels({"Li1":"Li"})
+
+        # EOG
+        raw = mne.set_bipolar_reference(raw, "VO", "VU", ch_name="VEOG")
+        raw = mne.set_bipolar_reference(raw, "Li", "Re", ch_name="HEOG")
+        eog_chans = {c:"eog" for c in ["VEOG", "HEOG"]}
+        raw.set_channel_types(eog_chans)
+
+        # ECOG
+        ecog_chans = [ch for ch in raw.ch_names if "AM" in ch or "HB" in ch or "HH" in ch or "HT" in ch]
+        ecog_chans = {v:"ecog" for v in ecog_chans}
+        raw.set_channel_types(ecog_chans)
+        # EKG
+        ekg_chans = [ch for ch in raw.ch_names if "ECG" in ch]
+        ekg_chans = {v:"ecg" for v in ekg_chans}
+        raw.set_channel_types(ekg_chans)
+        # dump everything else
+        dump_chans = [ch for ch in raw.ch_names if "el" in ch]
+        dump_chans.extend([ch for ch in raw.ch_names if re.match("\d", ch)])
+        for misc_chan in ['thor+', 'abdo+', 'xyz+', 'PULS+', 'BEAT+', 'cn']:
+            if misc_chan in raw.ch_names:
+                dump_chans.append(misc_chan)
+        raw.drop_channels(dump_chans)
+        for ch in raw.ch_names:
+            if "MKR" in ch or "Mo" in ch or "REF" in ch or "T4" in ch or "T3" in ch or "A1" in ch or "A2" in ch:
+                raw.drop_channels([ch])
+        raw.set_montage("standard_1005", on_missing="ignore")
+
+        raw.save(join(proc_dir, f"EPI_{this_subj}_{day}-raw.fif"),
+                 overwrite=overwrite)
+        del raw
