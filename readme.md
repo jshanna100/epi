@@ -1,10 +1,10 @@
-### Run order for scripts
+# Run order for scripts
 
 ## Convert
 At the beginning of the scripts, specify the directories where the files should be loaded from/saved to
-# Greifswald (1000s)
+### Greifswald (1000s)
 Run convert_edf.py
-# Frankfurt (3000s)
+### Frankfurt (3000s)
 Run convert_trc.py
 
 ## Filter
