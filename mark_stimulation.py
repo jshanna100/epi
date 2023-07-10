@@ -25,7 +25,7 @@ min_bad = 25
 picks = ["Fz","AFz","Fp1","Fp2","FC1","FC2","Cz"]
 n_jobs = 8
 
-subjs = ["1001", "1002", "3001", "3002"]
+subjs = ["1001", "1002"]
 conds = ["Stim"] # no point in doing this to sham conditions
 
 for subj in subjs:
@@ -45,7 +45,7 @@ for subj in subjs:
         # average the channels, put back into single dimensional form
         tfr_aschan= power.data.mean(axis=1)[:, 0].reshape(-1)
 
-        # identify stimulation periods. do not remember how any of this works
+        # identify stimulation periods. i do not remember how any of this works
         winner_std = np.inf
         for tfr_upper_thresh in tfr_thresh_range:
             these_annotations = raw.annotations.copy()
@@ -110,11 +110,11 @@ for subj in subjs:
         winner_annot.append(last_annot["onset"], analy_duration,
                             last_annot["description"])
 
-        raw.set_annotations(winner_annot)
         print("\nThreshold of {} was optimal.\nDurations:".format(winner_id))
         print(winner_durations)
         print("\nStd:{}\n".format(winner_std))
 
         avg_dur = np.array(winner_durations).mean()
 
-    raw.save(join(proc_dir, f"af_EPI_{subj}_{cond}-raw.fif"), overwrite=True)
+        winner_annot.save(join(proc_dir, f"stim_EPI_{subj}_{cond}-annot.fif"),
+                          overwrite=True)

@@ -52,7 +52,6 @@ for subj in subjs:
 
         raw = raws[0]
         del raws
-
         ## organise and mark the channels
         # rename the EEG channels
         eeg_chans = [ch for ch in raw.ch_names if "EEG" in ch]

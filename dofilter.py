@@ -9,7 +9,7 @@ root_dir = "/home/jev/hdd/epi/"
 proc_dir = join(root_dir, "proc") # where the files are
 proc_files = listdir(proc_dir)
 
-subjs = ["1001", "1002", "3001", "3002"]
+subjs = ["1001", "1002"]
 conds = ["Stim", "Sham"]
 
 l_freq = 0.3
@@ -32,5 +32,12 @@ for subj in subjs:
         # filter and save
         raw = mne.io.Raw(join(proc_dir, infile), preload=True)
         raw.filter(l_freq=l_freq, h_freq=h_freq, n_jobs=n_jobs)
-        raw.notch_filter(np.arange(50,h_freq,50), n_jobs=n_jobs)
+        raw.notch_filter(np.arange(50, h_freq, 50), n_jobs=n_jobs)
+
+        # reference to nose
+        try:
+            raw = mne.set_eeg_reference(raw, ref_channels=["Nase"])[0]
+        except:
+            print("No Nase channel found")
+
         raw.save(join(proc_dir, outfile), overwrite=overwrite)

@@ -13,7 +13,7 @@ raw.save parameters in the final line.
 root_dir = "/home/jev/hdd/epi/"
 proc_dir = join(root_dir, "proc")
 
-subjs = ["1001", "1002", "3001", "3002"]
+subjs = ["1001", "1002"]
 conds = ["Sham", "Stim"]
 
 for subj in subjs:
