@@ -1,22 +1,31 @@
 import mne
 from os import listdir
 import re
-from os.path import isdir
+from os.path import join
 
-if isdir("/home/jev"):
-    root_dir = "/home/jev/hdd/epi/"
-elif isdir("/home/jeff"):
-    root_dir = "/home/jeff/hdd/jeff/epi/"
-proc_dir = root_dir+"proc/"
-subjs = ["1001"]
-conds = ["Stim"]
+root_dir = "/home/jev/hdd/epi/"
+proc_dir = join(root_dir, "proc")
+proclist = listdir(proc_dir)
+subjs = ["1001", "1002", "1003", "1004", "1005", "2001", "3001", "3002"]
+conds = ["Stim", "Sham"]
+overwrite = False
 
 for subj in subjs:
     for cond in conds:
-        raw = mne.io.Raw("{}aof_EPI_{}_{}-raw.fif".format(proc_dir, subj, cond),
-                         preload=True)
+        try:
+            raw = mne.io.Raw(join(proc_dir, f"HT_f_EPI_{subj}_{cond}-raw.fif"),
+                            preload=True)
+            stim_str = "pstim" if cond == "Stim" else "stim"
+            annots = mne.read_annotations(join(proc_dir, f"{stim_str}_EPI_{subj}_{cond}-annot.fif"))
+        except:
+            print(f"{subj} {cond} does not exist. Skipping.")
+            continue
+        outfile = f"c_EPI_{subj}_{cond}-raw.fif"
+        if outfile in proclist and not overwrite:
+            print(f"{outfile} already exists. Skipping...")
+            continue
         raws = []
-        for annot in raw.annotations:
+        for annot in annots:
             match = re.match("(.*)_Stimulation (\d)", annot["description"])
             if match:
                 stim_pos, stim_idx = match.group(1), match.group(2)
@@ -31,5 +40,4 @@ for subj in subjs:
             continue
         raw_cut = raws[0]
         raw_cut.append(raws[1:])
-        raw_cut.save("{}caof_EPI_{}_{}-raw.fif".format(proc_dir,subj,cond),
-                     overwrite=True)
+        raw_cut.save(join(proc_dir, outfile))

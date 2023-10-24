@@ -5,6 +5,7 @@ import re
 from read_trc import raw_from_neo
 import numpy as np
 from os.path import join
+import datetime
 
 
 """
@@ -16,6 +17,7 @@ as this script.
 """
 
 subjs = ["3001", "3002"] # define subjects
+subjs = ["3001"]
 
 root_dir = "/home/jev/hdd/epi/" # root directory
 raw_dir = join(root_dir, "raw") # get raw files from here
@@ -23,7 +25,12 @@ proc_dir = join(root_dir, "proc") # save the processed files here
 proclist = listdir(proc_dir) # get list of files already processed
 overwrite = True # if False, skip if file already there
 
-downsamp = 400 # downsample to 400Hz, could probably go even lower
+downsamp = 300 # downsample to 300Hz, could probably go even lower
+n_jobs = 12
+
+cond_dict = {"3001":{0:"Stim", 3:"Sham"},
+             "3002":{2:"Stim", 0:"Sham"}
+             }
 
 for this_subj in subjs:
     this_dir = join(raw_dir, f"EPI_{this_subj}", "EEG")
@@ -40,24 +47,25 @@ for this_subj in subjs:
         ids.append(this_match.group(3))
 
     # get rid of redundant
-    days = list(np.unique(np.array(days)))
-    ids = list(np.unique(np.array(ids)))
+    days = list(set(days))
+    days.sort()
+    ids = list(set(ids))
 
-    for day in days:
+    for k, v in cond_dict[this_subj].items():
         raw_names = []
         datetimes = []
-        if f"EPI_{this_subj}_{day}-raw.fif" in proclist and not overwrite:
+        if f"EPI_{this_subj}_{days[k]}-raw.fif" in proclist and not overwrite:
             print("Already exist; Skipping...")
             continue
         for id in ids:
             # this loop makes temporary conversions to MNE in the next
             # step these conversions are combined into a single file per
             # session
-            filename = "{}_{}_{}.TRC".format(this_subj, day, id)
+            filename = "{}_{}_{}.TRC".format(this_subj, days[k], id)
             if filename not in filelist:
                 continue
             raw = raw_from_neo(join(this_dir, filename)) # convert
-            raw.resample(downsamp, n_jobs="cuda") # change to integer if no cuda
+            raw.resample(downsamp, n_jobs=n_jobs)
             temp_path = join(proc_dir, "temp", f"{id}-raw.fif")
             raw.save(temp_path, overwrite=True)
             raw_names.append(temp_path)
@@ -65,11 +73,15 @@ for this_subj in subjs:
             del raw
 
         # now combine the raw files into single session
-        file_order = np.argsort(datetimes) # make sure we append files in correct order
+        print("\nCombining files\n")
+        file_order = np.argsort(datetimes)[::-1] # make sure we append files in correct order
         raw_names = [raw_names[idx] for idx in np.nditer(file_order)]
         raw = mne.io.Raw(raw_names[0])
-        for rn in raw_names[1:]:
+        expected_time = raw.info["meas_date"] + datetime.timedelta(0, raw.times[-1])
+        for rn_idx, rn in enumerate(raw_names[1:]):
             next_raw = mne.io.Raw(rn)
+            print(f"\nExpected {expected_time}\nFound {next_raw.info['meas_date']}\n")
+            expected_time = next_raw.info["meas_date"] + datetime.timedelta(0, next_raw.times[-1])
             raw.append(next_raw)
         raw.meas_date = datetimes[0]
         del next_raw
@@ -113,6 +125,7 @@ for this_subj in subjs:
                 raw.drop_channels([ch])
         raw.set_montage("standard_1005", on_missing="ignore")
 
-        raw.save(join(proc_dir, f"EPI_{this_subj}_{day}-raw.fif"),
+        raw.save(join(proc_dir, f"EPI_{this_subj}_{v}-raw.fif"),
                  overwrite=overwrite)
+        breakpoint()
         del raw

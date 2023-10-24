@@ -13,8 +13,8 @@ proc_dir = join(root_dir, "proc")
 
 tfr_thresh_range = list(np.linspace(0.001, 0.008, 50))
 tfr_lower_thresh = 1e-6
-pre_stim_buffer = 5 # in case of residual stimulation effects
-post_stim_buffer = 10 # in case of residual stimulation effects
+pre_stim_buffer = 7 # in case of residual stimulation effects
+post_stim_buffer = 5 # in case of residual stimulation effects
 analy_duration = 60 # how much of a time period before and after stimulation
 # if you want a different time period for the intermediate stimulations,
 # otherwise leave the same as analy_duration
@@ -118,3 +118,4 @@ for subj in subjs:
 
         winner_annot.save(join(proc_dir, f"stim_EPI_{subj}_{cond}-annot.fif"),
                           overwrite=True)
+        breakpoint()

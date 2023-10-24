@@ -1,0 +1,18 @@
+Enter python within an appropriate Anaconda Environment
+
+import mne
+
+annotations can be loaded with the following command:
+annotations = mne.read_annotations(annotation_filename)
+
+load a raw file
+raw = mne.io.Raw(raw_filename)
+if it's still in brainvision format
+raw = mne.io.read_raw_brainvision(raw_brainvision.vhdr)
+
+you can set the annotations for a raw object as follows
+raw.set_annotations(annotations)
+
+you can combine multiple annotations into one simply by adding them
+new_annots = annot1 + annot2 + annot3
+
